@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>คลังภาพกิจกรรม โรงเรียนคงทองวิทยา</title>
+  <link rel="icon" href="logo.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600&family=Sarabun:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="#/">
+      <img src="logo.jpg" alt="ตราโรงเรียนคงทองวิทยา">
+      <span>
+        <strong>คลังภาพกิจกรรม</strong>
+        <small>โรงเรียนคงทองวิทยา</small>
+      </span>
+    </a>
+  </header>
+
+  <main>
+    <p id="status" class="status">กำลังโหลด...</p>
+
+    <section id="home" hidden>
+      <form id="filters" class="filters" autocomplete="off">
+        <input id="q" type="search" placeholder="ค้นหาชื่องาน เช่น กีฬาสี, ประชุม">
+        <select id="year" aria-label="ปี"></select>
+        <select id="month" aria-label="เดือน"></select>
+        <select id="day" aria-label="วัน"></select>
+        <button id="clear" type="button" class="btn-ghost">ล้างตัวกรอง</button>
+      </form>
+      <div id="tags" class="tags"></div>
+      <p id="count" class="count"></p>
+      <div id="grid" class="grid"></div>
+      <button id="more" type="button" class="btn-more" hidden>โหลดเพิ่ม</button>
+      <div id="others" class="others" hidden>
+        <h2 class="section-title">อัลบั้มกิจกรรมอื่นๆ</h2>
+        <div id="othersGrid" class="grid"></div>
+      </div>
+    </section>
+
+    <section id="album" hidden>
+      <a href="#/" id="back" class="back">← กลับหน้าแรก</a>
+      <img id="albumCover" class="album-cover" alt="">
+      <div class="album-head">
+        <div>
+          <p id="albumDate" class="album-date"></p>
+          <h1 id="albumTitle"></h1>
+          <div id="albumTags" class="tags"></div>
+        </div>
+        <a id="download" class="btn-download" target="_blank" rel="noopener"></a>
+      </div>
+      <h2 class="section-title">ภาพตัวอย่าง</h2>
+      <div id="previews" class="previews"></div>
+    </section>
+  </main>
+
+  <dialog id="lightbox" class="lightbox">
+    <img id="lightboxImg" alt="">
+    <button type="button" class="lb-btn lb-close" data-act="close" aria-label="ปิด">✕</button>
+    <button type="button" class="lb-btn lb-prev" data-act="prev" aria-label="ภาพก่อนหน้า">‹</button>
+    <button type="button" class="lb-btn lb-next" data-act="next" aria-label="ภาพถัดไป">›</button>
+  </dialog>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
