@@ -33,13 +33,19 @@
         <select id="day" aria-label="วัน"></select>
         <button id="clear" type="button" class="btn-ghost">ล้างตัวกรอง</button>
       </form>
-      <div id="tags" class="tags"></div>
-      <p id="count" class="count"></p>
+      <p class="count">
+        <span id="count"></span>
+        <button id="activeTag" type="button" class="tag active" hidden></button>
+      </p>
       <div id="grid" class="grid"></div>
       <button id="more" type="button" class="btn-more" hidden>โหลดเพิ่ม</button>
       <div id="others" class="others" hidden>
         <h2 class="section-title">อัลบั้มกิจกรรมอื่นๆ</h2>
         <div id="othersGrid" class="grid"></div>
+      </div>
+      <div id="tagSection" class="tag-section">
+        <h2 class="section-title">ค้นหาตามแท็ก</h2>
+        <div id="tags" class="tags"></div>
       </div>
     </section>
 
@@ -50,14 +56,42 @@
         <div>
           <p id="albumDate" class="album-date"></p>
           <h1 id="albumTitle"></h1>
-          <div id="albumTags" class="tags"></div>
         </div>
         <a id="download" class="btn-download" target="_blank" rel="noopener"></a>
       </div>
       <h2 class="section-title">ภาพตัวอย่าง</h2>
       <div id="previews" class="previews"></div>
+      <div id="albumTagSection" class="tag-section">
+        <h2 class="section-title">แท็ก</h2>
+        <div id="albumTags" class="tags"></div>
+      </div>
+    </section>
+
+    <section id="admin" hidden>
+      <a href="#/" class="back">← กลับหน้าแรก</a>
+      <h1 class="admin-heading">จัดการอัลบั้ม</h1>
+      <form id="loginForm" class="admin-login">
+        <label for="pw">รหัสผ่านผู้ดูแล</label>
+        <input id="pw" type="password" autocomplete="current-password" required>
+        <button type="submit" class="btn-primary">เข้าสู่ระบบ</button>
+        <p id="loginMsg" class="admin-msg" role="status"></p>
+      </form>
+      <div id="adminPanel" hidden>
+        <div class="admin-tools">
+          <input id="adminQ" type="search" placeholder="ค้นหาชื่ออัลบั้มหรือวันที่">
+          <label><input id="adminOnlyHidden" type="checkbox"> เฉพาะที่ซ่อนอยู่</label>
+          <button id="logout" type="button" class="btn-ghost">ออกจากระบบ</button>
+        </div>
+        <p class="admin-hint">พิมพ์ชื่อใหม่แล้วกดบันทึก (เว้นว่าง = ใช้ชื่อจากโฟลเดอร์) · ติ๊ก "ซ่อน" เพื่อไม่ให้แสดงบนเว็บ · มีผลทันที</p>
+        <p id="adminCount" class="count"></p>
+        <div id="adminList" class="admin-list"></div>
+      </div>
     </section>
   </main>
+
+  <footer class="site-footer">
+    <a href="#/admin">สำหรับผู้ดูแล</a>
+  </footer>
 
   <dialog id="lightbox" class="lightbox">
     <img id="lightboxImg" alt="">

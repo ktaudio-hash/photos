@@ -26,6 +26,16 @@
     return [...new Set(tags)];
   }
 
+  function prepare(a) {
+    return {
+      ...a,
+      y: +a.date.slice(0, 4),
+      m: +a.date.slice(5, 7),
+      d: +a.date.slice(8, 10),
+      tags: a.special ? [] : makeTags(a.title),
+    };
+  }
+
   function imageUrl(id, width) {
     if (id.startsWith('demo-')) return demoImage(id);
     return `https://drive.google.com/thumbnail?id=${id}&sz=w${width}`;
@@ -50,9 +60,10 @@
     return a.title || `กิจกรรมวันที่ ${thaiDate(a, true)}`;
   }
 
-  // ===== Routing (#/album/<id> หรือ #/?y=&m=&d=&q=&tag=) =====
+  // ===== Routing (#/album/<id>, #/admin หรือ #/?y=&m=&d=&q=&tag=) =====
   function parseHash() {
     const hash = location.hash.slice(1) || '/';
+    if (hash === '/admin') return { view: 'admin' };
     const albumMatch = hash.match(/^\/album\/([^/?]+)/);
     if (albumMatch) return { view: 'album', id: decodeURIComponent(albumMatch[1]) };
     const params = new URLSearchParams(hash.split('?')[1] || '');
@@ -79,8 +90,12 @@
     const r = parseHash();
     $('home').hidden = r.view !== 'home';
     $('album').hidden = r.view !== 'album';
+    $('admin').hidden = r.view !== 'admin';
     if (r.view === 'album') {
       renderAlbum(r.id);
+      window.scrollTo(0, 0);
+    } else if (r.view === 'admin') {
+      renderAdmin();
       window.scrollTo(0, 0);
     } else {
       renderHome(r);
@@ -122,6 +137,9 @@
     $('count').textContent = list.length
       ? (hasFilter ? `พบ ${list.length} อัลบั้ม` : `ทั้งหมด ${list.length} อัลบั้ม`)
       : 'ไม่พบอัลบั้มที่ตรงกับการค้นหา';
+    // แถบแท็กอยู่ท้ายหน้า จึงแสดงแท็กที่กำลังกรองไว้ตรงนี้ด้วย กดเพื่อล้าง
+    $('activeTag').hidden = !f.tag;
+    $('activeTag').textContent = `#${f.tag} ✕`;
     $('grid').innerHTML = list.slice(0, shown).map(cardHtml).join('');
     $('more').hidden = list.length <= shown;
 
@@ -136,6 +154,7 @@
     albums.forEach(a => a.tags.forEach(t => { freq[t] = (freq[t] || 0) + 1; }));
     const top = Object.keys(freq).sort((a, b) => freq[b] - freq[a]).slice(0, 15);
     if (active && !top.includes(active)) top.unshift(active);
+    $('tagSection').hidden = !top.length;
     $('tags').innerHTML = top.map(t =>
       `<button type="button" class="tag${t === active ? ' active' : ''}" data-tag="${esc(t)}">#${esc(t)}</button>`).join('');
   }
@@ -165,6 +184,7 @@
     $('albumCover').src = imageUrl(a.cover, 1600);
     $('albumDate').textContent = a.special ? 'อัลบั้มกิจกรรมอื่นๆ' : thaiDate(a, true);
     $('albumTitle').textContent = albumTitle(a);
+    $('albumTagSection').hidden = !a.tags.length;
     $('albumTags').innerHTML = a.tags.map(t =>
       `<a class="tag" href="#/?tag=${encodeURIComponent(t)}">#${esc(t)}</a>`).join('');
     $('download').href = `https://drive.google.com/drive/folders/${a.id}`;
@@ -173,6 +193,102 @@
     lightboxImages = [a.cover, ...a.previews];
     $('previews').innerHTML = a.previews.map((p, i) =>
       `<button type="button" data-index="${i + 1}"><img src="${imageUrl(p, 500)}" alt="ภาพตัวอย่าง ${i + 1}" loading="lazy"></button>`).join('');
+  }
+
+  // ===== แอดมิน (#/admin) =====
+  // รหัสผ่านตรวจที่ Apps Script — เก็บไว้ในแท็บนี้ชั่วคราว (sessionStorage) ปิดแท็บแล้วต้องเข้าใหม่
+  const pwStore = {
+    get() { try { return sessionStorage.getItem('adminPw') || ''; } catch (e) { return ''; } },
+    set(v) { try { if (v) sessionStorage.setItem('adminPw', v); else sessionStorage.removeItem('adminPw'); } catch (e) { /* เปิดแบบส่วนตัว */ } },
+  };
+  let adminPw = pwStore.get();
+  let adminAlbums = null;
+
+  function api(action, body) {
+    return fetch(window.APP_CONFIG.API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ ...body, action, password: adminPw }),
+    })
+      .then(r => r.json())
+      .then(res => { if (res.error) throw new Error(res.error); return res; });
+  }
+
+  function renderAdmin() {
+    document.title = 'จัดการอัลบั้ม — คลังภาพกิจกรรม';
+    $('status').hidden = true;
+    if (!window.APP_CONFIG.API_URL) return showLogin('ต้องใส่ API_URL ใน config.js ก่อนจึงจะใช้หน้าแอดมินได้');
+    if (!adminPw) return showLogin('');
+    if (adminAlbums) return showPanel();
+    showLogin('กำลังโหลด...');
+    api('list', {})
+      .then(res => { adminAlbums = res.albums.map(prepare); showPanel(); })
+      .catch(err => { adminPw = ''; pwStore.set(''); showLogin(err.message); });
+  }
+
+  function showLogin(msg) {
+    $('loginForm').hidden = false;
+    $('adminPanel').hidden = true;
+    $('loginMsg').textContent = msg;
+  }
+
+  function showPanel() {
+    $('loginForm').hidden = true;
+    $('adminPanel').hidden = false;
+    renderAdminList();
+  }
+
+  function renderAdminList() {
+    const q = $('adminQ').value.trim().toLowerCase();
+    const onlyHidden = $('adminOnlyHidden').checked;
+    const list = adminAlbums.filter(a => (!onlyHidden || a.hidden) && (!q ||
+      albumTitle(a).toLowerCase().includes(q) || a.originalTitle.toLowerCase().includes(q) || thaiDate(a, true).includes(q)));
+    updateAdminCount(list.length);
+    $('adminList').innerHTML = list.map(adminRowHtml).join('');
+  }
+
+  function updateAdminCount(shownCount) {
+    const hiddenCount = adminAlbums.filter(a => a.hidden).length;
+    $('adminCount').textContent = `แสดง ${shownCount} จาก ${adminAlbums.length} อัลบั้ม · ซ่อนอยู่ ${hiddenCount}`;
+  }
+
+  // ช่องชื่อแสดงเฉพาะชื่อที่แอดมินตั้ง — ว่าง = ใช้ชื่อจากโฟลเดอร์ (แสดงเป็น placeholder)
+  function adminRowHtml(a) {
+    const custom = a.title === a.originalTitle ? '' : a.title;
+    const fallback = a.originalTitle || `กิจกรรมวันที่ ${thaiDate(a, true)}`;
+    return `<div class="admin-row${a.hidden ? ' is-hidden' : ''}" data-id="${esc(a.id)}">
+      <img src="${imageUrl(a.cover, 200)}" alt="" loading="lazy">
+      <div class="admin-info">
+        <div class="admin-date">${a.special ? 'ภาพคัดพิเศษ' : thaiDate(a, true)} · ${a.count} ภาพ</div>
+        <input class="admin-title" value="${esc(custom)}" placeholder="${esc(fallback)}" aria-label="ชื่ออัลบั้ม">
+        <div class="admin-orig">ชื่อจากโฟลเดอร์: ${esc(a.originalTitle || '(ไม่มีชื่อ)')}</div>
+      </div>
+      <label class="admin-hide"><input type="checkbox" class="admin-hidden"${a.hidden ? ' checked' : ''}> ซ่อน</label>
+      <div class="admin-actions">
+        <button type="button" class="btn-primary admin-save">บันทึก</button>
+        <span class="admin-msg" role="status"></span>
+      </div>
+    </div>`;
+  }
+
+  function saveAdminRow(row) {
+    const a = adminAlbums.find(x => x.id === row.dataset.id);
+    const title = row.querySelector('.admin-title').value.trim();
+    const hidden = row.querySelector('.admin-hidden').checked;
+    const btn = row.querySelector('.admin-save');
+    const msg = row.querySelector('.admin-msg');
+    btn.disabled = true;
+    msg.textContent = 'กำลังบันทึก...';
+    api('save', { id: a.id, title: title === a.originalTitle ? '' : title, hidden })
+      .then(() => {
+        Object.assign(a, prepare({ ...a, title: title || a.originalTitle, hidden }));
+        row.classList.toggle('is-hidden', hidden);
+        msg.textContent = '✓ บันทึกแล้ว';
+        albums = adminAlbums.filter(x => !x.hidden);
+        updateAdminCount($('adminList').children.length);
+      })
+      .catch(err => { msg.textContent = err.message; })
+      .finally(() => { btn.disabled = false; });
   }
 
   // ===== Lightbox =====
@@ -203,6 +319,31 @@
     if (!t) return;
     const f = currentFilters();
     setFilters({ ...f, tag: f.tag === t.dataset.tag ? '' : t.dataset.tag });
+    window.scrollTo(0, 0); // แถบแท็กอยู่ท้ายหน้า — เลื่อนขึ้นไปดูผลลัพธ์
+  });
+  $('activeTag').addEventListener('click', () => setFilters({ ...currentFilters(), tag: '' }));
+
+  $('loginForm').addEventListener('submit', e => {
+    e.preventDefault();
+    adminPw = $('pw').value;
+    pwStore.set(adminPw);
+    $('pw').value = '';
+    renderAdmin();
+  });
+  $('logout').addEventListener('click', () => {
+    adminPw = '';
+    pwStore.set('');
+    adminAlbums = null;
+    showLogin('');
+  });
+  $('adminQ').addEventListener('input', renderAdminList);
+  $('adminOnlyHidden').addEventListener('change', renderAdminList);
+  $('adminList').addEventListener('click', e => {
+    const btn = e.target.closest('.admin-save');
+    if (btn) saveAdminRow(btn.closest('.admin-row'));
+  });
+  $('adminList').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.target.classList.contains('admin-title')) saveAdminRow(e.target.closest('.admin-row'));
   });
   $('more').addEventListener('click', () => { shown += PAGE_SIZE; renderHome(parseHash()); });
   $('grid').addEventListener('click', e => { if (e.target.closest('.card')) homeScrollY = window.scrollY; });
@@ -239,13 +380,7 @@
   fetch(window.APP_CONFIG.API_URL || 'sample-data.json')
     .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then(data => {
-      albums = data.albums.map(a => ({
-        ...a,
-        y: +a.date.slice(0, 4),
-        m: +a.date.slice(5, 7),
-        d: +a.date.slice(8, 10),
-        tags: a.special ? [] : makeTags(a.title),
-      }));
+      albums = data.albums.map(prepare);
       $('status').hidden = true;
       route();
     })
