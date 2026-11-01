@@ -9,17 +9,20 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600&family=Sarabun:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261101">
+  <link rel="stylesheet" href="style.css?v=20261101b">
 </head>
 <body>
   <header class="site-header">
-    <a class="brand" href="#/">
-      <img src="logo.jpg" alt="ตราโรงเรียนคงทองวิทยา">
-      <span>
-        <strong>คลังภาพกิจกรรม</strong>
-        <small>โรงเรียนคงทองวิทยา</small>
-      </span>
-    </a>
+    <div class="header-inner">
+      <a class="brand" href="#/">
+        <img src="logo.jpg" alt="ตราโรงเรียนคงทองวิทยา">
+        <span>
+          <strong>คลังภาพกิจกรรม</strong>
+          <small>โรงเรียนคงทองวิทยา</small>
+        </span>
+      </a>
+      <a class="nav-me" href="#/me">ภาพของฉัน</a>
+    </div>
   </header>
 
   <main>
@@ -77,14 +80,81 @@
         <p id="loginMsg" class="admin-msg" role="status"></p>
       </form>
       <div id="adminPanel" hidden>
-        <div class="admin-tools">
-          <input id="adminQ" type="search" placeholder="ค้นหาชื่ออัลบั้มหรือวันที่">
-          <label><input id="adminOnlyHidden" type="checkbox"> เฉพาะที่ซ่อนอยู่</label>
-          <button id="logout" type="button" class="btn-ghost">ออกจากระบบ</button>
+        <div class="tabs" id="adminTabs">
+          <button type="button" data-tab="albums" class="active">อัลบั้ม</button>
+          <button type="button" data-tab="teachers">บัญชีครู</button>
+          <button id="logout" type="button" class="btn-ghost tabs-end">ออกจากระบบ</button>
         </div>
-        <p class="admin-hint">พิมพ์ชื่อใหม่แล้วกดบันทึก (เว้นว่าง = ใช้ชื่อจากโฟลเดอร์) · ติ๊ก "ซ่อน" เพื่อไม่ให้แสดงบนเว็บ · มีผลทันที</p>
-        <p id="adminCount" class="count"></p>
-        <div id="adminList" class="admin-list"></div>
+        <div id="adminAlbumsTab">
+          <div class="admin-tools">
+            <input id="adminQ" type="search" placeholder="ค้นหาชื่ออัลบั้มหรือวันที่">
+            <label><input id="adminOnlyHidden" type="checkbox"> เฉพาะที่ซ่อนอยู่</label>
+          </div>
+          <p class="admin-hint">พิมพ์ชื่อใหม่แล้วกดบันทึก (เว้นว่าง = ใช้ชื่อจากโฟลเดอร์) · ติ๊ก "ซ่อน" เพื่อไม่ให้แสดงบนเว็บ · มีผลทันที</p>
+          <p id="adminCount" class="count"></p>
+          <div id="adminList" class="admin-list"></div>
+        </div>
+        <div id="adminTeachersTab" hidden>
+          <div class="admin-tools">
+            <input id="teacherQ" type="search" placeholder="ค้นหาชื่อครูหรือรหัสผู้ใช้">
+          </div>
+          <p class="admin-hint">รายชื่อมาจากโฟลเดอร์ในฐานข้อมูลรูปภาพครู · ตั้งรหัสผู้ใช้ (a-z 0-9 . _ -) → กด "สร้างรหัสผ่าน" → จดรหัสที่แสดงไปให้ครู (แสดงครั้งเดียว)</p>
+          <p id="teacherCount" class="count"></p>
+          <div id="teacherList" class="admin-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="me" hidden>
+      <form id="meLogin" class="admin-login" autocomplete="on">
+        <h1 class="admin-heading">ภาพของฉัน</h1>
+        <label for="meUser">รหัสผู้ใช้</label>
+        <input id="meUser" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+        <label for="mePw">รหัสผ่าน</label>
+        <input id="mePw" type="password" autocomplete="current-password" required>
+        <button type="submit" class="btn-primary">เข้าสู่ระบบ</button>
+        <p id="meLoginMsg" class="admin-msg" role="status"></p>
+        <p class="admin-hint">ยังไม่มีบัญชีหรือลืมรหัสผ่าน ติดต่องานโสตทัศนศึกษา</p>
+      </form>
+
+      <div id="meConsent" class="consent" hidden>
+        <h1 class="admin-heading">ขอความยินยอมใช้ข้อมูลใบหน้า</h1>
+        <div class="consent-text">
+          <p>ระบบ "ภาพของฉัน" จะค้นหาภาพกิจกรรมที่มีท่านอยู่ โดยเปรียบเทียบใบหน้าในภาพกิจกรรม (ตั้งแต่ 1 มกราคม 2569) กับภาพของท่านในฐานข้อมูลรูปภาพครูของโรงเรียน</p>
+          <ul>
+            <li><b>ข้อมูลที่ใช้:</b> ภาพใบหน้าของท่านในฐานข้อมูลรูปภาพครู และค่าตัวเลขที่คำนวณจากใบหน้า ซึ่งเป็น<b>ข้อมูลชีวภาพ</b>ตามพระราชบัญญัติคุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562</li>
+            <li><b>ที่เก็บ:</b> ค่าตัวเลขใบหน้าประมวลผลและเก็บไว้บนคอมพิวเตอร์ของงานโสตทัศนศึกษาเท่านั้น ไม่อัปโหลดขึ้นอินเทอร์เน็ต บนเว็บเก็บเพียงรายการว่าท่านอยู่ในภาพใด</li>
+            <li><b>ผู้ที่เห็น:</b> รายการภาพของท่านเห็นได้เฉพาะท่านเมื่อเข้าสู่ระบบ ผู้ดูแลระบบเห็นเพียงจำนวนภาพ</li>
+            <li><b>บุคคลอื่น:</b> ระบบไม่เก็บข้อมูลใบหน้าของนักเรียนหรือบุคคลที่ไม่ได้ให้ความยินยอม</li>
+            <li><b>การเรียนรู้:</b> ภาพที่ท่านกด "ใช่ฉัน" จะใช้ช่วยให้ระบบจดจำท่านได้แม่นขึ้น</li>
+            <li><b>ถอนความยินยอม:</b> ทำได้ทุกเมื่อในหน้านี้ ระบบจะลบผลการค้นหาและข้อมูลใบหน้าของท่านทั้งหมด</li>
+          </ul>
+        </div>
+        <p id="meConsentNote" class="admin-msg" role="status"></p>
+        <div class="consent-actions">
+          <button id="consentYes" type="button" class="btn-primary">ยินยอม</button>
+          <button id="consentNo" type="button" class="btn-ghost">ไม่ยินยอม</button>
+          <button type="button" class="btn-ghost me-logout">ออกจากระบบ</button>
+        </div>
+      </div>
+
+      <div id="mePanel" hidden>
+        <div class="me-head">
+          <div>
+            <h1 id="meHello" class="admin-heading"></h1>
+            <p id="meNote" class="admin-hint"></p>
+          </div>
+          <div class="me-menu">
+            <button id="meWithdraw" type="button" class="btn-ghost">ถอนความยินยอม</button>
+            <button type="button" class="btn-ghost me-logout">ออกจากระบบ</button>
+          </div>
+        </div>
+        <div class="tabs" id="meTabs">
+          <button type="button" data-tab="mine" class="active">ภาพของฉัน <span id="mineCount"></span></button>
+          <button type="button" data-tab="maybe">อาจเป็นคุณ? <span id="maybeCount"></span></button>
+        </div>
+        <p id="meTabHint" class="admin-hint"></p>
+        <div id="meList"></div>
       </div>
     </section>
   </main>
@@ -100,7 +170,7 @@
     <button type="button" class="lb-btn lb-next" data-act="next" aria-label="ภาพถัดไป">›</button>
   </dialog>
 
-  <script src="config.js?v=20261101"></script>
-  <script src="app.js?v=20261101"></script>
+  <script src="config.js?v=20261101b"></script>
+  <script src="app.js?v=20261101b"></script>
 </body>
 </html>

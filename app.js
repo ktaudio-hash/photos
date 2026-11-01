@@ -64,6 +64,7 @@
   function parseHash() {
     const hash = location.hash.slice(1) || '/';
     if (hash === '/admin') return { view: 'admin' };
+    if (hash === '/me') return { view: 'me' };
     const albumMatch = hash.match(/^\/album\/([^/?]+)/);
     if (albumMatch) return { view: 'album', id: decodeURIComponent(albumMatch[1]) };
     const params = new URLSearchParams(hash.split('?')[1] || '');
@@ -91,11 +92,15 @@
     $('home').hidden = r.view !== 'home';
     $('album').hidden = r.view !== 'album';
     $('admin').hidden = r.view !== 'admin';
+    $('me').hidden = r.view !== 'me';
     if (r.view === 'album') {
       renderAlbum(r.id);
       window.scrollTo(0, 0);
     } else if (r.view === 'admin') {
       renderAdmin();
+      window.scrollTo(0, 0);
+    } else if (r.view === 'me') {
+      renderMe();
       window.scrollTo(0, 0);
     } else {
       renderHome(r);
@@ -204,13 +209,17 @@
   let adminPw = pwStore.get();
   let adminAlbums = null;
 
-  function api(action, body) {
+  // ส่งคำสั่งไป Apps Script (text/plain เพื่อไม่ให้เบราว์เซอร์ต้องขออนุญาต CORS ก่อน)
+  function callApi(payload) {
     return fetch(window.APP_CONFIG.API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ ...body, action, password: adminPw }),
-    })
-      .then(r => r.json())
+      body: JSON.stringify(payload),
+    }).then(r => r.json());
+  }
+
+  function api(action, body) {
+    return callApi({ ...body, action, password: adminPw })
       .then(res => { if (res.error) throw new Error(res.error); return res; });
   }
 
@@ -320,6 +329,190 @@
       });
   }
 
+  // ===== แอดมิน: บัญชีครู =====
+  let adminTeachers = null;
+
+  function showAdminTab(tab) {
+    document.querySelectorAll('#adminTabs [data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    $('adminAlbumsTab').hidden = tab !== 'albums';
+    $('adminTeachersTab').hidden = tab !== 'teachers';
+    if (tab === 'teachers') loadTeachers();
+  }
+
+  function loadTeachers() {
+    if (adminTeachers) return renderTeacherList();
+    $('teacherCount').textContent = 'กำลังโหลด...';
+    $('teacherList').innerHTML = '';
+    api('teachers', {})
+      .then(res => { adminTeachers = res; renderTeacherList(); })
+      .catch(err => { $('teacherCount').textContent = err.message; });
+  }
+
+  function renderTeacherList() {
+    const q = $('teacherQ').value.trim().toLowerCase();
+    const all = adminTeachers.teachers;
+    const list = all.filter(t => !q || t.name.toLowerCase().includes(q) || t.username.includes(q));
+    $('teacherCount').textContent = `ครู ${all.length} คน · มีรหัสผ่านแล้ว ${all.filter(t => t.hasPassword).length} · ` +
+      `ยินยอมแล้ว ${all.filter(t => t.consent === true).length} · สแกนล่าสุด ${adminTeachers.lastScan ? thaiDateTime(adminTeachers.lastScan) : 'ยังไม่เคยสแกน'}`;
+    $('teacherList').innerHTML = list.map(teacherRowHtml).join('');
+  }
+
+  function teacherRowHtml(t) {
+    const consent = t.consent === true ? '<span class="chip ok">ยินยอมแล้ว</span>'
+      : t.consent === false ? '<span class="chip no">ไม่ยินยอม</span>' : '<span class="chip">ยังไม่ตอบ</span>';
+    return `<div class="teacher-row" data-id="${esc(t.id)}">
+      <div class="teacher-name"><b>${esc(t.name)}</b>
+        <div class="admin-orig">${consent} ภาพ ${t.photos} · รอยืนยัน ${t.pending}</div></div>
+      <input class="teacher-user" value="${esc(t.username)}" placeholder="รหัสผู้ใช้ เช่น kt001" aria-label="รหัสผู้ใช้" autocapitalize="none" spellcheck="false">
+      <button type="button" class="btn-ghost teacher-save">บันทึก</button>
+      <button type="button" class="btn-primary teacher-pw"${t.username ? '' : ' disabled'}>${t.hasPassword ? 'สร้างรหัสผ่านใหม่' : 'สร้างรหัสผ่าน'}</button>
+      <div class="admin-msg teacher-msg" role="status"></div>
+    </div>`;
+  }
+
+  function teacherRowAction(row, kind) {
+    const t = adminTeachers.teachers.find(x => x.id === row.dataset.id);
+    const msg = row.querySelector('.teacher-msg');
+    const pwBtn = row.querySelector('.teacher-pw');
+    if (kind === 'save') {
+      msg.textContent = 'กำลังบันทึก...';
+      api('setUsername', { id: t.id, username: row.querySelector('.teacher-user').value })
+        .then(res => {
+          t.username = res.username;
+          row.querySelector('.teacher-user').value = res.username;
+          pwBtn.disabled = false;
+          msg.textContent = '✓ บันทึกรหัสผู้ใช้แล้ว';
+        })
+        .catch(err => { msg.textContent = err.message; });
+      return;
+    }
+    if (t.hasPassword && !window.confirm(`สร้างรหัสผ่านใหม่ให้ ${t.name}?\nรหัสผ่านเดิมจะใช้ไม่ได้ทันที`)) return;
+    pwBtn.disabled = true;
+    msg.textContent = 'กำลังสร้าง...';
+    api('resetPassword', { id: t.id })
+      .then(res => {
+        t.hasPassword = true;
+        pwBtn.textContent = 'สร้างรหัสผ่านใหม่';
+        msg.innerHTML = `รหัสผ่านของ <b>${esc(t.username)}</b>: <code class="pw">${esc(res.password)}</code> — จดไว้ให้ครู (แสดงครั้งเดียว)`;
+      })
+      .catch(err => { msg.textContent = err.message; })
+      .finally(() => { pwBtn.disabled = false; });
+  }
+
+  // ===== ภาพของฉัน (#/me) =====
+  // บัตรผ่านของครูเก็บในเครื่อง (หมดอายุที่ Apps Script ใน 6 ชั่วโมง)
+  const localStore = {
+    get(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } },
+    set(k, v) { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k); } catch (e) { /* เปิดแบบส่วนตัว */ } },
+  };
+  let teacherToken = localStore.get('teacherToken');
+  let meData = null; // { name, consent, photos: [{image, album, s, st}], lastScan }
+  let meTab = 'mine';
+
+  function teacherApi(action, body) {
+    return callApi({ ...body, action, token: teacherToken }).then(res => {
+      if (res.relogin) setTeacherToken('');
+      if (res.error) throw new Error(res.error);
+      return res;
+    });
+  }
+
+  function setTeacherToken(token) {
+    teacherToken = token;
+    localStore.set('teacherToken', token);
+    meData = null;
+  }
+
+  function renderMe() {
+    document.title = 'ภาพของฉัน — คลังภาพกิจกรรม';
+    $('status').hidden = true;
+    if (!window.APP_CONFIG.API_URL) return showMe('login', 'ต้องใส่ API_URL ใน config.js ก่อนจึงจะใช้งานได้');
+    if (!teacherToken) return showMe('login', '');
+    if (meData) return showMe(meData.consent === true ? 'panel' : 'consent');
+    showMe('loading');
+    teacherApi('me', {})
+      .then(res => { meData = res; renderMe(); })
+      .catch(err => showMe('login', err.message));
+  }
+
+  function showMe(view, msg) {
+    $('status').hidden = view !== 'loading';
+    if (view === 'loading') $('status').textContent = 'กำลังโหลด...';
+    $('meLogin').hidden = view !== 'login';
+    $('meConsent').hidden = view !== 'consent';
+    $('mePanel').hidden = view !== 'panel';
+    if (view === 'login') $('meLoginMsg').textContent = msg || '';
+    if (view === 'consent') {
+      $('meConsentNote').textContent = meData.consent === false
+        ? 'ท่านเลือก "ไม่ยินยอม" ไว้ ระบบจึงไม่ค้นหาภาพของท่าน หากเปลี่ยนใจ กด "ยินยอม" ได้ทุกเมื่อ' : '';
+    }
+    if (view === 'panel') renderMePanel();
+  }
+
+  function renderMePanel() {
+    const known = new Map(albums.map(a => [a.id, a])); // อัลบั้มที่ซ่อน/ลบแล้ว จะไม่แสดง
+    const photos = meData.photos.filter(p => known.has(p.album));
+    const mine = photos.filter(p => p.st === 'auto' || p.st === 'yes');
+    const maybe = photos.filter(p => p.st === 'maybe');
+    $('meHello').textContent = `สวัสดี ${meData.name || ''}`;
+    $('meNote').textContent = meData.lastScan
+      ? `ค้นหาภาพล่าสุดเมื่อ ${thaiDateTime(meData.lastScan)} · ระบบค้นหาภาพใหม่ทุกวัน`
+      : 'ระบบกำลังเตรียมค้นหาภาพของคุณ กรุณากลับมาดูอีกครั้งในวันถัดไป';
+    $('mineCount').textContent = `(${mine.length})`;
+    $('maybeCount').textContent = `(${maybe.length})`;
+    document.querySelectorAll('#meTabs [data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === meTab));
+    $('meTabHint').textContent = meTab === 'mine'
+      ? 'ภาพที่ระบบมั่นใจว่ามีคุณอยู่ · กด "ไม่ใช่ฉัน" หากระบบจำผิด'
+      : 'ภาพที่ระบบไม่แน่ใจ · กด "ใช่ฉัน" เพื่อย้ายไปที่ภาพของฉัน (ระบบจะจดจำคุณได้แม่นขึ้น)';
+
+    const list = meTab === 'mine' ? mine : maybe;
+    lightboxImages = [];
+    if (!list.length) {
+      $('meList').innerHTML = `<p class="status">${meTab === 'mine' ? 'ยังไม่พบภาพของคุณ' : 'ไม่มีภาพที่รอยืนยัน'}</p>`;
+      return;
+    }
+    const byAlbum = new Map();
+    list.forEach(p => { if (!byAlbum.has(p.album)) byAlbum.set(p.album, []); byAlbum.get(p.album).push(p); });
+    $('meList').innerHTML = albums.filter(a => byAlbum.has(a.id)).map(a => {
+      const items = byAlbum.get(a.id).map(p => mePhotoHtml(p, lightboxImages.push(p.image) - 1)).join('');
+      return `<div class="me-album">
+        <h2 class="section-title"><a href="#/album/${encodeURIComponent(a.id)}">${esc(albumTitle(a))}</a>
+          <small>${a.special ? 'ภาพคัดพิเศษ' : thaiDate(a, true)} · ${byAlbum.get(a.id).length} ภาพ</small></h2>
+        <div class="me-grid">${items}</div></div>`;
+    }).join('');
+  }
+
+  function mePhotoHtml(p, index) {
+    const actions = meTab === 'mine'
+      ? `<a class="btn-primary me-dl" href="https://drive.google.com/uc?export=download&id=${encodeURIComponent(p.image)}" target="_blank" rel="noopener">ดาวน์โหลด</a>
+         <button type="button" class="btn-danger me-answer" data-answer="no">ไม่ใช่ฉัน</button>`
+      : `<button type="button" class="btn-primary me-answer" data-answer="yes">ใช่ฉัน</button>
+         <button type="button" class="btn-danger me-answer" data-answer="no">ไม่ใช่</button>`;
+    return `<div class="me-photo" data-image="${esc(p.image)}">
+      <button type="button" class="me-open" data-index="${index}"><img src="${imageUrl(p.image, 400)}" alt="" loading="lazy"></button>
+      <div class="me-actions">${actions}</div></div>`;
+  }
+
+  // ตอบ ใช่/ไม่ใช่ — อัปเดตหน้าจอทันที ถ้าบันทึกไม่สำเร็จจึงย้อนกลับ
+  function answerPhoto(image, answer) {
+    const p = meData.photos.find(x => x.image === image);
+    const before = p.st;
+    p.st = answer;
+    renderMePanel();
+    teacherApi('confirm', { image, answer }).catch(err => {
+      if (!teacherToken) return renderMe();
+      p.st = before;
+      renderMePanel();
+      window.alert(err.message);
+    });
+  }
+
+  function thaiDateTime(iso) {
+    const d = new Date(iso);
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear() + 543} ${pad(d.getHours())}:${pad(d.getMinutes())} น.`;
+  }
+
   // ===== Lightbox =====
   function openLightbox(i) {
     lightboxIndex = (i + lightboxImages.length) % lightboxImages.length;
@@ -363,7 +556,64 @@
     adminPw = '';
     pwStore.set('');
     adminAlbums = null;
+    adminTeachers = null;
+    showAdminTab('albums');
     showLogin('');
+  });
+  $('adminTabs').addEventListener('click', e => {
+    const b = e.target.closest('[data-tab]');
+    if (b) showAdminTab(b.dataset.tab);
+  });
+  $('teacherQ').addEventListener('input', () => adminTeachers && renderTeacherList());
+  $('teacherList').addEventListener('click', e => {
+    const row = e.target.closest('.teacher-row');
+    if (e.target.closest('.teacher-save')) teacherRowAction(row, 'save');
+    if (e.target.closest('.teacher-pw')) teacherRowAction(row, 'password');
+  });
+
+  // ===== Events: ภาพของฉัน =====
+  $('meLogin').addEventListener('submit', e => {
+    e.preventDefault();
+    $('meLoginMsg').textContent = 'กำลังเข้าสู่ระบบ...';
+    callApi({ action: 'login', username: $('meUser').value, password: $('mePw').value })
+      .then(res => {
+        if (res.error) throw new Error(res.error);
+        $('mePw').value = '';
+        setTeacherToken(res.token);
+        renderMe();
+      })
+      .catch(err => { $('meLoginMsg').textContent = err.message; });
+  });
+  function setConsent(agree) {
+    teacherApi(agree ? 'consent' : 'withdraw', { agree })
+      .then(() => {
+        meData.consent = agree;
+        if (!agree) meData.photos = [];
+        renderMe();
+      })
+      .catch(err => { if (!teacherToken) renderMe(); else window.alert(err.message); });
+  }
+  $('consentYes').addEventListener('click', () => setConsent(true));
+  $('consentNo').addEventListener('click', () => setConsent(false));
+  $('meWithdraw').addEventListener('click', () => {
+    if (window.confirm('ถอนความยินยอม?\nระบบจะลบผลการค้นหาภาพและข้อมูลใบหน้าของท่านทั้งหมด และหยุดค้นหาภาพของท่าน')) setConsent(false);
+  });
+  document.querySelectorAll('.me-logout').forEach(b => b.addEventListener('click', () => {
+    callApi({ action: 'logout', token: teacherToken }).catch(() => {});
+    setTeacherToken('');
+    renderMe();
+  }));
+  $('meTabs').addEventListener('click', e => {
+    const b = e.target.closest('[data-tab]');
+    if (!b) return;
+    meTab = b.dataset.tab;
+    renderMePanel();
+  });
+  $('meList').addEventListener('click', e => {
+    const open = e.target.closest('.me-open');
+    if (open) openLightbox(+open.dataset.index);
+    const ans = e.target.closest('.me-answer');
+    if (ans) answerPhoto(ans.closest('.me-photo').dataset.image, ans.dataset.answer);
   });
   $('adminQ').addEventListener('input', renderAdminList);
   $('adminOnlyHidden').addEventListener('change', renderAdminList);
