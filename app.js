@@ -266,6 +266,7 @@
       <label class="admin-hide"><input type="checkbox" class="admin-hidden"${a.hidden ? ' checked' : ''}> ซ่อน</label>
       <div class="admin-actions">
         <button type="button" class="btn-primary admin-save">บันทึก</button>
+        <button type="button" class="btn-danger admin-delete">ลบ</button>
         <span class="admin-msg" role="status"></span>
       </div>
     </div>`;
@@ -289,6 +290,34 @@
       })
       .catch(err => { msg.textContent = err.message; })
       .finally(() => { btn.disabled = false; });
+  }
+
+  // ย้ายโฟลเดอร์อัลบั้มไปถังขยะ Drive — ต้องพิมพ์ "ลบ" ยืนยัน
+  function deleteAdminRow(row) {
+    const a = adminAlbums.find(x => x.id === row.dataset.id);
+    const msg = row.querySelector('.admin-msg');
+    const typed = window.prompt(
+      `ย้ายอัลบั้ม "${albumTitle(a)}" (${a.count} ภาพ) ไปถังขยะ Google Drive?\n` +
+      'อัลบั้มจะหายจากเว็บทันที และกู้คืนได้จากถังขยะ Drive ภายใน 30 วัน\n\n' +
+      'พิมพ์คำว่า ลบ เพื่อยืนยัน');
+    if (typed === null) return;
+    if (typed.trim() !== 'ลบ') {
+      msg.textContent = 'ยกเลิก: ต้องพิมพ์คำว่า "ลบ"';
+      return;
+    }
+    row.querySelectorAll('button').forEach(b => { b.disabled = true; });
+    msg.textContent = 'กำลังลบ...';
+    api('delete', { id: a.id })
+      .then(() => {
+        adminAlbums = adminAlbums.filter(x => x.id !== a.id);
+        albums = adminAlbums.filter(x => !x.hidden);
+        row.remove();
+        updateAdminCount($('adminList').children.length);
+      })
+      .catch(err => {
+        msg.textContent = err.message;
+        row.querySelectorAll('button').forEach(b => { b.disabled = false; });
+      });
   }
 
   // ===== Lightbox =====
@@ -341,6 +370,8 @@
   $('adminList').addEventListener('click', e => {
     const btn = e.target.closest('.admin-save');
     if (btn) saveAdminRow(btn.closest('.admin-row'));
+    const del = e.target.closest('.admin-delete');
+    if (del) deleteAdminRow(del.closest('.admin-row'));
   });
   $('adminList').addEventListener('keydown', e => {
     if (e.key === 'Enter' && e.target.classList.contains('admin-title')) saveAdminRow(e.target.closest('.admin-row'));
