@@ -186,6 +186,7 @@
       return;
     }
     $('status').hidden = true;
+    if (!viewedAlbums.has(a.id)) { viewedAlbums.add(a.id); track('album', a.id); }
     document.title = `${albumTitle(a)} — คลังภาพกิจกรรม`;
     $('albumCover').src = imageUrl(a.cover, 1600);
     $('albumDate').textContent = a.special ? 'อัลบั้มกิจกรรมอื่นๆ' : thaiDate(a, true);
@@ -250,6 +251,35 @@
     return callApi({ ...body, action, password: adminPw })
       .then(res => { if (res.error) throw new Error(res.error); return res; });
   }
+
+  // ===== สถิติการเข้าชม =====
+  // ส่งแบบไม่รอผล · ไม่นับการใช้งานของแอดมิน · ไม่มีคุกกี้หรือรหัสประจำเครื่อง (จำแค่ "วันที่นับล่าสุด")
+  function track(ev, key, extra) {
+    if (adminPw || !window.APP_CONFIG.API_URL) return;
+    fetch(window.APP_CONFIG.API_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      keepalive: true,
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'hit', ev, key, ...extra }),
+    }).catch(() => {});
+  }
+
+  // นับครั้งเดียวต่อการเปิดแท็บ และนับ "อุปกรณ์" ครั้งเดียวต่อเครื่องต่อวัน
+  function trackVisit() {
+    try {
+      if (sessionStorage.getItem('ktVisit')) return;
+      sessionStorage.setItem('ktVisit', '1');
+    } catch (e) { /* เปิดแบบส่วนตัว — นับต่อไป */ }
+    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Bangkok' });
+    let unique = true;
+    try {
+      unique = localStorage.getItem('ktDay') !== today;
+      localStorage.setItem('ktDay', today);
+    } catch (e) { /* นับเป็นอุปกรณ์ใหม่ */ }
+    track('visit', '', { unique });
+  }
+  const viewedAlbums = new Set();
 
   function renderAdmin() {
     document.title = 'จัดการอัลบั้ม — คลังภาพกิจกรรม';
@@ -365,7 +395,107 @@
     document.querySelectorAll('#adminTabs [data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
     $('adminAlbumsTab').hidden = tab !== 'albums';
     $('adminTeachersTab').hidden = tab !== 'teachers';
+    $('adminStatsTab').hidden = tab !== 'stats';
     if (tab === 'teachers') loadTeachers();
+    if (tab === 'stats') loadStats();
+  }
+
+  // ===== แอดมิน: สถิติ =====
+  let adminStats = null;
+
+  function loadStats(force) {
+    if (adminStats && !force) return renderStats();
+    $('statsBody').innerHTML = '<p class="count">กำลังโหลด...</p>';
+    api('stats', {})
+      .then(res => { adminStats = res; renderStats(); })
+      .catch(err => { $('statsBody').innerHTML = `<p class="count">${esc(err.message)}</p>`; });
+  }
+
+  // วันที่ (ค.ศ.) ย้อนหลังจากวันนี้ตามเวลาไทยของเซิร์ฟเวอร์ — เก่าสุดก่อน
+  function statsDays(today, n) {
+    const t = Date.parse(today + 'T00:00:00Z');
+    return Array.from({ length: n }, (_, i) => new Date(t - (n - 1 - i) * 86400000).toISOString().slice(0, 10));
+  }
+  const shortDate = d => `${+d.slice(8)} ${MONTHS_SHORT[+d.slice(5, 7) - 1]}`;
+  const fmt = n => n.toLocaleString('th-TH');
+
+  function sumGroup(rows, group) {
+    const out = {};
+    rows.forEach(r => Object.entries(r[group] || {}).forEach(([k, v]) => { out[k] = (out[k] || 0) + v; }));
+    return out;
+  }
+
+  function renderStats() {
+    const s = adminStats;
+    const n = +$('statsRange').value;
+    const days = statsDays(s.today, n);
+    const rows = days.map(d => s.days[d] || {});
+    const total = k => rows.reduce((sum, r) => sum + (r[k] || 0), 0);
+    const today = s.days[s.today] || {};
+    const max = Math.max(1, ...rows.map(r => r.v || 0));
+
+    const tile = (label, value, sub) =>
+      `<div class="stat-tile"><div class="stat-label">${label}</div><div class="stat-value">${value}</div><div class="stat-sub">${sub}</div></div>`;
+    const bars = days.map((d, i) => {
+      const r = rows[i];
+      const tip = `${shortDate(d)}: เข้าชม ${fmt(r.v || 0)} ครั้ง · ${fmt(r.u || 0)} อุปกรณ์`;
+      return `<div class="bar" tabindex="0" data-tip="${tip}" aria-label="${tip}"><i style="height:${((r.v || 0) / max) * 100}%"></i></div>`;
+    }).join('');
+
+    const views = sumGroup(rows, 'a');
+    const downloads = sumGroup(rows, 'd');
+    const albumIds = Object.keys(views).concat(Object.keys(downloads).filter(id => !(id in views)));
+    const top = albumIds
+      .sort((a, b) => (views[b] || 0) - (views[a] || 0) || (downloads[b] || 0) - (downloads[a] || 0))
+      .slice(0, 20);
+    const topMax = Math.max(1, ...top.map(id => views[id] || 0));
+    const albumRows = top.map((id, i) => {
+      const meta = s.titles[id];
+      const name = meta ? albumTitle(prepare(meta)) : '(อัลบั้มที่ถูกลบแล้ว)';
+      return `<tr>
+        <td class="num">${i + 1}</td>
+        <td>${meta ? `<a href="#/album/${encodeURIComponent(id)}">${esc(name)}</a>` : esc(name)}
+          <div class="rank-bar"><i style="width:${((views[id] || 0) / topMax) * 100}%"></i></div></td>
+        <td class="num">${fmt(views[id] || 0)}</td>
+        <td class="num">${fmt(downloads[id] || 0)}</td>
+      </tr>`;
+    }).join('');
+
+    const termList = (group, prefix) => {
+      const m = sumGroup(rows, group);
+      const list = Object.keys(m).sort((a, b) => m[b] - m[a]).slice(0, 15);
+      return list.length
+        ? `<ol class="term-list">${list.map(k => `<li><span>${prefix}${esc(k)}</span><b>${fmt(m[k])}</b></li>`).join('')}</ol>`
+        : '<p class="count">ยังไม่มีข้อมูล</p>';
+    };
+    const me = sumGroup(rows, 'me');
+
+    $('statsBody').innerHTML = `
+      <div class="stat-tiles">
+        ${tile('วันนี้', fmt(today.v || 0), `ครั้ง · ${fmt(today.u || 0)} อุปกรณ์`)}
+        ${tile(`${n} วันล่าสุด`, fmt(total('v')), `ครั้ง · ${fmt(total('u'))} อุปกรณ์-วัน`)}
+        ${tile('เฉลี่ยต่อวัน', fmt(Math.round(total('v') / n)), 'ครั้ง')}
+      </div>
+      <h3 class="stats-title">จำนวนการเข้าชมรายวัน</h3>
+      <div class="bars" role="img" aria-label="กราฟจำนวนการเข้าชมรายวัน ${n} วันล่าสุด">${bars}</div>
+      <div class="bars-axis"><span>${shortDate(days[0])}</span><span>สูงสุด ${fmt(max)} ครั้ง/วัน</span><span>${shortDate(days[n - 1])}</span></div>
+
+      <h3 class="stats-title">อัลบั้มยอดนิยม</h3>
+      ${top.length ? `<table class="stats-table">
+        <thead><tr><th class="num">#</th><th>อัลบั้ม</th><th class="num">เปิดดู</th><th class="num">ดาวน์โหลด</th></tr></thead>
+        <tbody>${albumRows}</tbody></table>` : '<p class="count">ยังไม่มีข้อมูล</p>'}
+
+      <div class="stats-cols">
+        <div><h3 class="stats-title">คำค้นหายอดนิยม</h3>${termList('q', '')}</div>
+        <div><h3 class="stats-title">แท็กยอดนิยม</h3>${termList('t', '#')}</div>
+      </div>
+
+      <h3 class="stats-title">ระบบ "ภาพของฉัน"</h3>
+      <div class="stat-tiles">
+        ${tile('เข้าสู่ระบบ', fmt(me.login || 0), `ครั้ง ใน ${n} วัน`)}
+        ${tile('ดาวน์โหลดภาพตัวเอง', fmt(me.download || 0), `ครั้ง ใน ${n} วัน`)}
+        ${tile('ครูที่ยินยอมแล้ว', fmt(s.teachers.consented), `จาก ${fmt(s.teachers.withPassword)} บัญชีที่มีรหัสผ่าน`)}
+      </div>`;
   }
 
   function loadTeachers() {
@@ -562,13 +692,21 @@
   $('year').addEventListener('change', e => setFilters({ ...currentFilters(), y: +e.target.value, m: 0, d: 0 }));
   $('month').addEventListener('change', e => setFilters({ ...currentFilters(), m: +e.target.value, d: 0 }));
   $('day').addEventListener('change', e => setFilters({ ...currentFilters(), d: +e.target.value }));
-  $('q').addEventListener('input', e => setFilters({ ...currentFilters(), q: e.target.value }));
+  let searchTimer = 0;
+  $('q').addEventListener('input', e => {
+    setFilters({ ...currentFilters(), q: e.target.value });
+    // นับคำค้นเมื่อหยุดพิมพ์ 2 วินาที (ไม่นับตัวอักษรระหว่างพิมพ์)
+    clearTimeout(searchTimer);
+    const q = e.target.value.trim();
+    if (q.length >= 2) searchTimer = setTimeout(() => track('search', q), 2000);
+  });
   $('filters').addEventListener('submit', e => e.preventDefault());
   $('clear').addEventListener('click', () => setFilters({}));
   $('tags').addEventListener('click', e => {
     const t = e.target.closest('[data-tag]');
     if (!t) return;
     const f = currentFilters();
+    if (f.tag !== t.dataset.tag) track('tag', t.dataset.tag);
     setFilters({ ...f, tag: f.tag === t.dataset.tag ? '' : t.dataset.tag });
     window.scrollTo(0, 0); // แถบแท็กอยู่ท้ายหน้า — เลื่อนขึ้นไปดูผลลัพธ์
   });
@@ -586,6 +724,7 @@
     pwStore.set('');
     adminAlbums = null;
     adminTeachers = null;
+    adminStats = null;
     showAdminTab('albums');
     showLogin('');
   });
@@ -594,6 +733,8 @@
     if (b) showAdminTab(b.dataset.tab);
   });
   $('teacherQ').addEventListener('input', () => adminTeachers && renderTeacherList());
+  $('statsRange').addEventListener('change', () => adminStats && renderStats());
+  $('statsReload').addEventListener('click', () => loadStats(true));
   $('teacherList').addEventListener('click', e => {
     const row = e.target.closest('.teacher-row');
     if (e.target.closest('.teacher-save')) teacherRowAction(row, 'save');
@@ -639,6 +780,7 @@
     renderMePanel();
   });
   $('meList').addEventListener('click', e => {
+    if (e.target.closest('.me-dl')) track('meDownload');
     const open = e.target.closest('.me-open');
     if (open) openLightbox(+open.dataset.index);
     const ans = e.target.closest('.me-answer');
@@ -659,6 +801,11 @@
   $('grid').addEventListener('click', e => { if (e.target.closest('.card')) homeScrollY = window.scrollY; });
 
   $('albumCover').addEventListener('click', () => openLightbox(0));
+  $('download').addEventListener('click', () => track('download', parseHash().id));
+  $('albumTags').addEventListener('click', e => {
+    const t = e.target.closest('.tag');
+    if (t) track('tag', t.textContent.replace(/^#/, ''));
+  });
   $('delCover').addEventListener('click', e => deleteAlbumImage(lightboxImages[0], e.currentTarget));
   $('previews').addEventListener('click', e => {
     const del = e.target.closest('[data-del]');
@@ -696,6 +843,7 @@
       albums = data.albums.map(prepare);
       $('status').hidden = true;
       route();
+      trackVisit();
     })
     .catch(() => {
       $('status').textContent = 'โหลดข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง';

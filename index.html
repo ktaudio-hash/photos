@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600&family=Sarabun:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261116">
+  <link rel="stylesheet" href="style.css?v=20261117">
 </head>
 <body>
   <header class="site-header">
@@ -87,6 +87,7 @@
         <div class="tabs" id="adminTabs">
           <button type="button" data-tab="albums" class="active">อัลบั้ม</button>
           <button type="button" data-tab="teachers">บัญชีครู</button>
+          <button type="button" data-tab="stats">สถิติ</button>
           <button id="logout" type="button" class="btn-ghost tabs-end">ออกจากระบบ</button>
         </div>
         <div id="adminAlbumsTab">
@@ -105,6 +106,18 @@
           <p class="admin-hint">รายชื่อมาจากโฟลเดอร์ในฐานข้อมูลรูปภาพครู · ตั้งรหัสผู้ใช้ (a-z 0-9 . _ -) → กด "สร้างรหัสผ่าน" → จดรหัสที่แสดงไปให้ครู (แสดงครั้งเดียว)</p>
           <p id="teacherCount" class="count"></p>
           <div id="teacherList" class="admin-list"></div>
+        </div>
+        <div id="adminStatsTab" hidden>
+          <div class="admin-tools">
+            <select id="statsRange" aria-label="ช่วงเวลา">
+              <option value="7">7 วันล่าสุด</option>
+              <option value="30" selected>30 วันล่าสุด</option>
+              <option value="90">90 วันล่าสุด</option>
+            </select>
+            <button id="statsReload" type="button" class="btn-ghost">โหลดใหม่</button>
+          </div>
+          <p class="admin-hint">นับจำนวนครั้งเท่านั้น ไม่เก็บข้อมูลส่วนตัวของผู้เข้าชม · ไม่นับการใช้งานของแอดมิน · "อุปกรณ์" = มือถือ/คอมที่เปิดเว็บในวันนั้น (นับเครื่องละครั้งต่อวัน)</p>
+          <div id="statsBody"></div>
         </div>
       </div>
     </section>
@@ -174,7 +187,7 @@
     <button type="button" class="lb-btn lb-next" data-act="next" aria-label="ภาพถัดไป">›</button>
   </dialog>
 
-  <script src="config.js?v=20261116"></script>
-  <script src="app.js?v=20261116"></script>
+  <script src="config.js?v=20261117"></script>
+  <script src="app.js?v=20261117"></script>
 </body>
 </html>
