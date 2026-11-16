@@ -177,8 +177,9 @@
 
   // ===== หน้าอัลบั้ม =====
   function renderAlbum(id) {
-    const a = albums.find(x => x.id === id);
-    if (!a) {
+    // แอดมินเปิดอัลบั้มที่ซ่อนอยู่ได้จากหน้าแอดมิน
+    const a = albums.find(x => x.id === id) || (adminAlbums || []).find(x => x.id === id);
+    if (!a || !a.cover) {
       $('album').hidden = true;
       $('status').hidden = false;
       $('status').innerHTML = 'ไม่พบอัลบั้มนี้ อาจถูกย้ายหรือลบไปแล้ว <a href="#/">กลับหน้าแรก</a>';
@@ -195,9 +196,36 @@
     $('download').href = `https://drive.google.com/drive/folders/${a.id}`;
     $('download').textContent = `ดาวน์โหลดภาพทั้งหมด (${a.count} ภาพ) ใน Google Drive`;
 
+    const isAdmin = !!adminPw;
+    $('albumAdminNote').hidden = !isAdmin;
+    $('delCover').hidden = !isAdmin;
+    $('delCover').disabled = false;
     lightboxImages = [a.cover, ...a.previews];
-    $('previews').innerHTML = a.previews.map((p, i) =>
-      `<button type="button" data-index="${i + 1}"><img src="${imageUrl(p, 500)}" alt="ภาพตัวอย่าง ${i + 1}" loading="lazy"></button>`).join('');
+    $('previews').innerHTML = a.previews.map((p, i) => `<div class="preview">
+      <button type="button" data-index="${i + 1}"><img src="${imageUrl(p, 500)}" alt="ภาพตัวอย่าง ${i + 1}" loading="lazy"></button>
+      ${isAdmin ? `<button type="button" class="img-del" data-del="${esc(p)}" title="ลบภาพนี้" aria-label="ลบภาพนี้">🗑</button>` : ''}
+    </div>`).join('');
+  }
+
+  // แอดมินลบภาพปก/ภาพตัวอย่าง: ย้ายไฟล์ไปถังขยะ Drive แล้วแสดงผลใหม่ทันที
+  function deleteAlbumImage(imageId, btn) {
+    const id = parseHash().id;
+    if (!window.confirm('ย้ายภาพนี้ไปถังขยะ Google Drive?\nภาพจะหายจากเว็บและจากโฟลเดอร์ Drive ทันที กู้คืนได้จากถังขยะภายใน 30 วัน')) return;
+    btn.disabled = true;
+    api('deleteImage', { id, imageId })
+      .then(res => {
+        [albums, adminAlbums || []].forEach(list => {
+          const a = list.find(x => x.id === id);
+          if (a) Object.assign(a, { cover: res.cover, previews: res.previews, count: res.count });
+        });
+        albums = albums.filter(x => x.cover);
+        renderAlbum(id);
+      })
+      .catch(err => {
+        btn.disabled = false;
+        window.alert('ลบไม่สำเร็จ: ' + err.message);
+        if (/รหัสผ่าน/.test(err.message)) { adminPw = ''; pwStore.set(''); renderAlbum(id); }
+      });
   }
 
   // ===== แอดมิน (#/admin) =====
@@ -275,6 +303,7 @@
       <label class="admin-hide"><input type="checkbox" class="admin-hidden"${a.hidden ? ' checked' : ''}> ซ่อน</label>
       <div class="admin-actions">
         <button type="button" class="btn-primary admin-save">บันทึก</button>
+        <a class="btn-ghost admin-view" href="#/album/${encodeURIComponent(a.id)}">ดู/ลบภาพ</a>
         <button type="button" class="btn-danger admin-delete">ลบ</button>
         <span class="admin-msg" role="status"></span>
       </div>
@@ -630,7 +659,10 @@
   $('grid').addEventListener('click', e => { if (e.target.closest('.card')) homeScrollY = window.scrollY; });
 
   $('albumCover').addEventListener('click', () => openLightbox(0));
+  $('delCover').addEventListener('click', e => deleteAlbumImage(lightboxImages[0], e.currentTarget));
   $('previews').addEventListener('click', e => {
+    const del = e.target.closest('[data-del]');
+    if (del) return deleteAlbumImage(del.dataset.del, del);
     const b = e.target.closest('[data-index]');
     if (b) openLightbox(+b.dataset.index);
   });

@@ -413,3 +413,18 @@ code.pw { font-size: 1.15rem; background: var(--yellow-soft); padding: 2px 8px; 
   .teacher-row .teacher-pw { grid-column: 1 / -1; }
   .me-grid { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ===== แอดมินลบภาพในหน้าอัลบั้ม ===== */
+.admin-note { background: #fff8e1; border: 1px solid #f5d77a; border-radius: 10px; padding: 8px 12px; margin: 0 0 12px; font-size: .9rem; }
+.cover-wrap, .preview { position: relative; }
+.cover-wrap { min-height: 56px; } /* ปุ่มลบไม่ทับปุ่มดาวน์โหลดตอนภาพปกยังโหลดไม่เสร็จ */
+.preview > button[data-index] { width: 100%; }
+.cover-wrap .img-del, .previews .img-del {
+  position: absolute; top: 8px; right: 8px;
+  width: 40px; height: 40px; border-radius: 50%;
+  border: 1px solid #f1b5b5; background: #fff; color: #c62828;
+  font-size: 1.1rem; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.25);
+}
+.cover-wrap .img-del:hover, .previews .img-del:hover { background: #fdecea; }
+.cover-wrap .img-del:disabled, .previews .img-del:disabled { opacity: .5; cursor: wait; }
+.admin-actions .admin-view { font: inherit; font-size: .85rem; border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; background: #fff; text-decoration: none; }

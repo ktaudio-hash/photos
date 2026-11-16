@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;600&family=Sarabun:wght@400;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=20261101b">
+  <link rel="stylesheet" href="style.css?v=20261116">
 </head>
 <body>
   <header class="site-header">
@@ -54,7 +54,11 @@
 
     <section id="album" hidden>
       <a href="#/" id="back" class="back">← กลับหน้าแรก</a>
-      <img id="albumCover" class="album-cover" alt="">
+      <p id="albumAdminNote" class="admin-note" hidden>โหมดแอดมิน: กด 🗑 บนภาพเพื่อย้ายภาพไปถังขยะ Google Drive (กู้คืนได้ใน 30 วัน)</p>
+      <div class="cover-wrap">
+        <img id="albumCover" class="album-cover" alt="">
+        <button id="delCover" type="button" class="img-del" title="ลบภาพปก" aria-label="ลบภาพปก" hidden>🗑</button>
+      </div>
       <div class="album-head">
         <div>
           <p id="albumDate" class="album-date"></p>
@@ -170,7 +174,7 @@
     <button type="button" class="lb-btn lb-next" data-act="next" aria-label="ภาพถัดไป">›</button>
   </dialog>
 
-  <script src="config.js?v=20261101b"></script>
-  <script src="app.js?v=20261101b"></script>
+  <script src="config.js?v=20261116"></script>
+  <script src="app.js?v=20261116"></script>
 </body>
 </html>
